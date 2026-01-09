@@ -1,5 +1,3 @@
-# README
-
 # Telegram 关键词自动回复 Bot（每群独立规则 / MySQL）
 
 本项目使用ChatGPT5.2 Thinking制作，由ChatGPT5.1 Pro修改，本人只负责复制粘贴，介意误用。以下皆由AI生成。
