@@ -1,173 +1,173 @@
-# Telegram Keyword Bot（群关键词自动回复）
+# README
 
-本项目使用ChatGPT5.2 Thinking制作，本人只负责复制粘贴，介意误用。以下皆由AI生成。
+# Telegram 关键词自动回复 Bot（每群独立规则 / MySQL）
 
-一个基于 **python-telegram-bot v22** 的 Telegram 群组关键词自动回复机器人。
+本项目使用ChatGPT5.2 Thinking制作，由ChatGPT5.1 Pro修改，本人只负责复制粘贴，介意误用。以下皆由AI生成。
 
-群管理员在群里发送 `/rule`，即可一键跳转到私聊管理界面，完成 **新增 / 查看 / 删除** 关键词规则；机器人在群内根据规则自动回复。
-
-> 适用场景：群 FAQ、关键词引导、自动客服、关键字触发指令提示等。
-> 
+一个基于 Python / MySQL 的 Telegram 群聊机器人，支持**按群单独配置关键词自动回复规则**，并通过**私聊菜单**进行可视化管理，不在群里刷屏。
 
 ---
 
-## 功能特性
+## 功能概览
 
-- **按群独立管理规则**：每个群拥有自己的规则集合，互不影响。
-- **仅管理员可管理**：只有群管理员/群主能进入管理界面、增删规则。
-- **私聊管理，不刷屏**：在群里 `/rule` 后点击按钮跳转私聊完成操作。
-- **多种匹配模式**
-    - `exact`：精确匹配（消息全文等于关键词）
-    - `contains`：包含匹配（消息文本包含关键词）
-    - `regex`：正则匹配（支持 Python `re`）
-    - `fuzzy`：模糊匹配（基于 `rapidfuzz`，适合轻微错别字/空格差异）
-- **规则列表增强**：查看规则时会显示回复内容预览（自动截断，避免太长刷屏）。
-- **一键删除提示消息**：群里 `/rule` 的提示消息带「好的」按钮，管理员点一下即可删除该条提示。
-- **缓存 & 立即生效**
-    - 规则会做 TTL 缓存，减少 DB 查询
-    - 新增/删除规则会自动 **invalidate cache**，群内立刻使用最新规则
-- **防刷屏节流**：同一条规则在同一群内触发后，会有冷却时间（cooldown）避免被刷屏。
-- **审计日志（Audit Log）**：增删规则会写入审计表，便于追踪是谁做了什么操作。
-
----
-
-## 运行环境
-
-- Python **3.11+**（推荐）
-- MySQL / MariaDB（项目默认使用 `asyncmy` 驱动）
-- Telegram Bot（需要在 BotFather 创建，并**设置 username** 以生成 deep link）
-
-依赖见 `requirements.txt`（核心：python-telegram-bot、SQLAlchemy asyncio、asyncmy、rapidfuzz、regex、loguru、pydantic）。
+- ✅ **按群管理规则**：每个群有独立的关键词规则，不会互相影响。
+- ✅ **四种匹配模式**：
+    - 精确匹配（exact）
+    - 包含匹配（contains）
+    - 正则匹配（regex）
+    - 模糊匹配（fuzzy，基于 RapidFuzz）
+- ✅ **智能按钮删除**：
+    - 机器人回复里默认带「✅ 好的」按钮。
+    - **只有触发关键词的群员本人 + 群管理员**可以点这个按钮删除该条机器人回复。
+- ✅ **自动删除回复**：
+    - 每条规则可独立设置：
+        - 不自动删除 / 3 秒 / 5 秒 / 10 秒 / 15 秒 / 30 秒。
+- ✅ **私聊管理，不打扰群聊**：
+    - 群里管理员发 `/rule`，点按钮跳转私聊。
+    - 在私聊菜单中新增 / 查看 / 编辑 / 删除规则。
+- ✅ **规则编辑能力**：
+    - 可编辑：关键词、回复内容、是否自动删除、自动删除秒数。
+- ✅ **多群切换**：
+    - 私聊菜单支持在最近管理过的群之间切换，并显示为 **群名 (群ID)**。
+- ✅ **限流与缓存**：
+    - 同一群同一规则，有冷却时间（默认 8 秒），防止刷屏。
+    - 规则在内存中缓存，减少数据库压力。
 
 ---
 
-## 项目结构
+## 目录结构简述
+
+项目解压后结构大致如下（只列核心部分）：
 
 ```
 telegram-keyword-bot/
-  run.py                     # 启动入口
-  requirements.txt
-  .env                       # 本地环境变量（⚠️不要提交真实 token）
-  scripts/
-    init_db.py               # 初始化数据库表
-  app/
-    bot.py                   # PTB Application/handlers 注册
-    config.py                # 配置读取（pydantic-settings）
-    db.py                    # SQLAlchemy async engine/session
-    models.py                # 表结构：groups / rules / audit_log
-    crud.py                  # CRUD：规则增删查 + 审计写入
-    cache.py                 # RuleCache（TTL 缓存 + invalidate）
-    matching.py              # 规则匹配（exact/contains/regex/fuzzy）
-    handlers/
-      admin.py               # 管理端：/rule + 私聊菜单 + 会话
-      messages.py            # 群消息监听：取规则 → 匹配 → 回复
+├── app/
+│   ├── bot.py            # 入口，创建 Telegram Application 并挂载所有 Handler
+│   ├── config.py         # 读取 .env 配置
+│   ├── db.py             # SQLAlchemy AsyncEngine & Session 封装
+│   ├── models.py         # ORM 模型（GroupConfig / Rule / AuditLog）
+│   ├── crud.py           # 基础数据库操作封装
+│   ├── cache.py          # 规则缓存（含正则预编译）
+│   ├── matching.py       # 匹配模式与限流 Throttle
+│   └── handlers/
+│       ├── admin.py      # 管理菜单相关 Handler（/rule 私聊管理等）
+│       └── messages.py   # 群消息匹配与自动回复
+├── scripts/
+│   └── init_db.py        # 初始化数据库（建表）
+├── requirements.txt      # Python 依赖
+├── run.py                # 程序入口（python run.py）
+└── .env                  # 环境变量配置（需自行修改）
 ```
 
 ---
 
-## 快速开始（本地运行）
+## 环境要求
 
-### 1) 准备 .env
+- **Python**：建议 Python 3.11（项目在 Python 3.11 上开发 & 测试）
+- **数据库**：MySQL / MariaDB，字符集建议 `utf8mb4`
+- **依赖管理**：直接使用 `pip` 安装 `requirements.txt`
 
-项目用 `app/config.py` 读取以下环境变量：
+---
 
-- `BOT_TOKEN`：你的机器人 token
-- `DATABASE_URL`：SQLAlchemy URL（建议 MySQL/MariaDB）
-- `username`：数据库用户名
-- `password`：数据库密码
-- `127.0.0.1`：数据库地址（若是1panel容器则为 1panel_mysql）
-- `dbname`：数据库名
-- `RULE_CACHE_TTL_SECONDS`：规则缓存 TTL（默认 10 秒）
-- `RULE_COOLDOWN_SECONDS`：同规则冷却时间（默认 2 秒）
+## 安装与运行（本地环境）
 
-示例：
+### 1. 解压项目
 
-```
-BOT_TOKEN=123456:ABCDEF_your_token_here
-DATABASE_URL=mysql+asyncmy://username:password@127.0.0.1:3306/dbname?charset=utf8mb4
-RULE_CACHE_TTL_SECONDS=10
-RULE_COOLDOWN_SECONDS=2
+把压缩包解压到本地，例如：
+
+```bash
+unzip telegram-keyword-bot_v0.21.zip
+cd telegram-keyword-bot
 ```
 
-> 如果你在 Docker 里连 MySQL，host 可能是 db 或容器网络别名。
+> 如果解压后是 telegram-keyword-bot/telegram-keyword-bot/... 这种双层目录，请先 cd 到内层真正有 app/ 的目录。
 > 
 
-### 2) 安装依赖
+---
+
+### 2. 创建虚拟环境（推荐）
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows 用 .venv\Scripts\activate
+
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows (PowerShell)
+# .venv\Scripts\Activate.ps1
+```
+
+---
+
+### 3. 安装依赖
+
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 3) 初始化数据库表
+---
+
+### 4. 配置 `.env`
+
+在项目根目录下会有一个 `.env` 文件，你需要**手动改掉里面的示例配置**，建议格式如下：
+
+```
+# 必填：BotFather 创建的 Telegram 机器人 Token
+BOT_TOKEN=你的BotToken
+
+# 必填：MySQL 连接串（使用 asyncmy 驱动）
+# 示例：mysql+asyncmy://user:pass@127.0.0.1:3306/keywordbot?charset=utf8mb4
+DATABASE_URL=mysql+asyncmy://用户名:密码@数据库地址:3306/数据库名?charset=utf8mb4
+
+# 可选：同一群同一规则的冷却时间（秒），避免刷屏
+RULE_COOLDOWN_SECONDS=8
+
+# 可选：规则缓存 TTL（秒），降低数据库压力
+RULE_CACHE_TTL_SECONDS=60
+```
+
+---
+
+### 5. 初始化数据库
+
+在 `.env` 配置好 `DATABASE_URL` 后，执行：
 
 ```bash
 python scripts/init_db.py
 ```
 
-看到 `OK: tables created.` 即成功。
+看到输出 `OK: tables created.` 即表示数据库表已经创建完成，包括：
 
-### 4) 启动机器人
+- `groups`：记录群的基础信息
+- `rules`：关键词规则（含匹配模式、回复内容、自动删除秒数等）
+- `audit_log`：操作审计日志（记录规则的增删改）
+
+---
+
+### 6. 启动机器人
 
 ```bash
 python run.py
 ```
 
----
+成功后，控制台会显示类似：
 
-## 可选：Docker 部署示例 （我不知道AI写的，我也没验证过）
-
-仓库本身不强制依赖 Docker 文件，但你可以用下面的示例快速部署（按需调整）：
-
-### Dockerfile（示例）
-
-```docker
-FROM python:3.11-slim
-
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY . .
-CMD ["python", "run.py"]
+```
+OK: tables created.
+Bot is starting polling...
 ```
 
-### docker-compose.yml（示例，MySQL + bot）
-
-```yaml
-services:
-db:
-image: mysql:8
-environment:
-MYSQL_ROOT_PASSWORD: root
-MYSQL_DATABASE: telegram_keyword_bot
-MYSQL_USER: bot
-MYSQL_PASSWORD: botpass
-command:["--character-set-server=utf8mb4","--collation-server=utf8mb4_unicode_ci"]
-ports:
--"3306:3306"
-
-bot:
-build: .
-environment:
-BOT_TOKEN:"xxxx"
-DATABASE_URL:"mysql+asyncmy://bot:botpass@db:3306/telegram_keyword_bot?charset=utf8mb4"
-RULE_CACHE_TTL_SECONDS:"10"
-RULE_COOLDOWN_SECONDS:"2"
-depends_on:
-- db
-```
-
-> 初始化表可以在容器启动时跑一次 python scripts/init_db.py，或在 bot 启动前由 entrypoint 脚本执行。
-> 
+然后你就可以在 Telegram 中操作了。
 
 ---
 
 ## （推荐）使用1panel Python运行环境运行
 
 名称：随意
+
 项目目录：下载的文件目录
+
 启动命令：`pip install --no-cache-dir -r requirements.txt && python scripts/init_db.py && python [run.py](http://run.py/)`
 
 应用：Python 3.11.14
@@ -184,90 +184,295 @@ depends_on:
 
 主机映射：无
 
-## 使用方法（管理员）
+---
 
-### 1) 在群里进入管理
+## 使用说明
 
-- 将 bot 拉进群，并赋予**管理员权限**
-- 管理员发送 `/rule`
-- bot 会发一条消息，包含：
-    - 「🔧 去私聊管理本群规则」按钮（deep link）
-    - 「好的」按钮（管理员点击后会删除这条提示）
+### 1. 把机器人拉进群
 
-### 2) 在私聊里管理规则
+1. 在 Telegram 搜索你的 Bot（BotFather 创建的那个）。
+2. 把机器人添加到目标群。
+3. 确保机器人有足够权限：
+    - 读取消息
+    - 删除消息（如果你要用“自动删除”或者“好的”删除按钮）
 
-点击 deep link 后会进入私聊菜单：
+---
+
+### 2. 群内管理员入口：`/rule`
+
+在**群内**，由管理员发送：
+
+```
+/rule
+```
+
+机器人会在群里回复一条消息，带有一个按钮：
+
+- 🔧 去私聊管理本群规则
+- ✅ 好的（删除这条提示）——**只有群管理员可以点掉这条提示消息**
+
+点击“去私聊管理本群规则”后，会跳转到和机器人的**私聊**，并进入该群的管理模式。
+
+---
+
+### 3. 私聊主菜单
+
+在与机器人私聊时，会看到类似的主菜单（使用内联按钮）：
 
 - ➕ 新增规则
-选择匹配模式 → 发送关键词/规则 → 发送回复 → 确认保存
 - 📄 查看规则
-展示前 20 条规则（含回复内容预览）并提供「删除」按钮
-- 🔁 切换群（如果你最近管理过多个群）
-无需回到群里再次 `/rule`，可直接切换当前管理目标
+- 🔄 切换群
+- 📌 当前群: 群名 (群ID)
+
+> 如果你管理多个群，可以在“切换群”菜单中快速切换，所有条目都是 群名 (群ID) 的格式，方便区分。
+> 
 
 ---
 
-## 规则匹配与优先级
+### 4. 新增规则流程
 
-- 机器人会按 DB 查询结果顺序依次尝试匹配规则。
-- 当前实现中规则排序大致为：
-    1. `enabled`（启用的优先）
-    2. `priority`（数值更小的优先）
-    3. `id`（更小的更靠前）
+点击「➕ 新增规则」后，流程如下：
 
-因此你可以通过调小 `priority` 来让某条规则更先命中（默认创建为 100）。
+1. **选择匹配模式**
+会看到四个按钮：
+    - 精确 exact
+    - 包含 contains
+    - 正则 regex
+    - 模糊 fuzzy
+    以及一个：
+    - ⬅️ 返回主菜单（可随时中止新增流程）
+2. **发送关键词 / 规则内容**
+    - 机器人会提示你“请发送关键词/规则内容”
+    - 你在私聊里发一条文本作为关键词或正则表达式。
+3. **发送回复内容**
+    - 机器人会提示“请发送要回复的内容（可多行）”
+    - 你可以发任意文本，支持多行。
+4. **选择自动删除时间 + 确认**
+    - 机器人会显示一个预览，以及一堆按钮：
+        - 不自动删除 / 3s / 5s / 10s / 15s / 30s
+    - 选择好自动删除时间后，点击：
+        - ✅ 保存
+        或：
+        - ❌ 取消
 
----
-
-## 多人/多群同时使用会不会冲突？
-
-✅ **可以同时使用，不会互相影响。**
-
-原因：
-
-- 规则存储按 `group_id` 隔离，不同群的规则天然分开。
-- 管理会话状态放在 `context.user_data`（按用户隔离），不同管理员互不覆盖。
-- `ConversationHandler` 只在私聊场景处理管理流程，群内只负责 `/rule` 与自动回复。
-
-唯一需要注意的点：
-
-- **同一个管理员**如果同时管理多个群，需要通过「切换群」来选择当前管理目标（代码里已支持“最近管理群列表”）。
-
----
-
-## 常见坑 & 排查
-
-### 1) 群里关键词不触发
-
-- **BotFather 隐私模式（privacy mode）**：
-如果 bot 需要读取群内普通消息进行关键词匹配，通常要在 BotFather 关闭 privacy：`/setprivacy -> Disable`
-（否则 bot 可能只能收到命令和被@的消息）
-
-### 2) deep link 无法生成
-
-- 需要 bot 在 BotFather 设置 **username**，否则无法生成 `https://t.me/<username>?start=...`。
-
-### 3) 日志出现 `_is_admin Timed out`
-
-- 这是 Telegram API 请求超时，和逻辑无关。
-代码里已在 `bot.py` 对 `HTTPXRequest` 做了超时配置；如果仍频繁超时，可适当加大超时或增加重试次数。
-
-### 4) 规则列表太长/回复太长显示不全
-
-- 规则列表默认只显示前 20 条，并会对回复内容做预览截断（避免消息超过 Telegram 长度限制）。
+保存成功后，该群的规则就生效了。
 
 ---
 
-## 开发建议
+### 5. 查看 / 编辑 / 删除规则
 
-- 想增加「编辑规则」「启用/禁用规则」「调整优先级」等功能：
-    - 在 `crud.py` 增加 update 接口
-    - 在 `handlers/admin.py` 增加对应的会话步骤与按钮即可
-- 想用 webhook：
-    - `bot.py` 把 `run_polling()` 改为 webhook 启动方式，并配置公网 https
+在私聊菜单点击「📄 查看规则」，会列出当前群前 20 条规则，例如：
+
+```
+✅ #1 [exact] p=100 :: hi
+    ↳ 回复: Hello
+    ↳ 自动删除: 不自动删除
+
+✅ #2 [contains] p=100 :: 早上好
+    ↳ 回复: 早上好呀～
+    ↳ 自动删除: 5 秒后自动删除
+```
+
+每条规则下面会有一组按钮：
+
+- ✏️ 编辑关键词 #ID
+- ✏️ 编辑回复 #ID
+- ⏱ 自动删除 #ID
+- 🗑 删除 #ID
+
+具体行为：
+
+- **编辑关键词**：
+    - 机器人提示你发送新的关键词/规则。
+    - 发出新内容后即更新。
+- **编辑回复**：
+    - 机器人提示你发送新的回复内容。
+    - 发出新内容后即更新。
+- **自动删除**：
+    - 进入一个二级菜单，重新选择：不自动删除 / 3 / 5 / 10 / 15 / 30 秒。
+- **删除**：
+    - 直接删除该条规则，并写入审计日志。
+
+所有修改操作都会：
+
+- 写入 `audit_log` 表，记录修改前后内容。
+- 刷新规则缓存，保证新规则立即生效。
 
 ---
 
-## License
+### 6. 群内自动回复行为
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+当群成员发送消息时：
+
+- 机器人只处理**普通文本消息**：
+    - 不处理图片、视频等非文本。
+    - **忽略以 `/` 开头的命令消息**（不会被关键词触发）。
+- 在当前群已启用的规则中，按以下顺序检查：
+    - 只加载 `enabled = True` 的规则。
+    - 按 `priority` 和 `id` 排序。
+    - 对每条规则调用 `match_rule` 进行匹配。
+- 命中某条规则后：
+    - 会先检查限流（Throttle）：
+        - 同一群 + 同一规则，若在 `RULE_COOLDOWN_SECONDS` 秒内刚触发过，则本次不再触发。
+    - 通过限流后，机器人发送一条回复消息：
+        - 回复内容为规则配置的 `reply` 文本。
+        - 底下自带一个按钮：
+            - 「✅ 好的」
+                - `callback_data = "rule_reply_ok:<触发者用户ID>"`
+
+### 关于「✅ 好的」按钮的权限
+
+- 能删除这条机器人回复的只有：
+    1. 触发这条回复的**普通群员本人**；
+    2. 任意**群管理员**。
+- 其他群员点击会收到提示：“只有触发该回复的成员或管理员可以删除。”
+
+### 关于自动删除时间 `delete_after`
+
+- 如果某条规则设置了 `delete_after`（3 / 5 / 10 / 15 / 30 秒），则机器人会在发送回复后：
+    - 启动一个异步任务，延时指定秒数后尝试删除那条机器人回复。
+- 删除失败（例如已经被手动删掉、权限变更等）会被忽略并记日志，不影响后续运行。
+
+---
+
+## 匹配模式详细说明与示例
+
+### 1. 精确匹配（exact）
+
+**逻辑：**
+
+```python
+t.strip() == p.strip()
+```
+
+- `t`：群消息文本
+- `p`：规则中的 pattern（关键词）
+
+也就是说：
+
+- 去掉首尾空格后，**完全相等**才算命中。
+
+**示例：**
+
+- 规则：
+    - 模式：`exact`
+    - 关键词：`早上好`
+- 群消息：
+    - `早上好` ✅ 匹配
+    - `早上好呀` ❌ 不匹配
+    - `早上好` ✅ 匹配（首尾空格会被去掉）
+    - `大家早上好` ❌ 不匹配
+
+适用场景：
+
+> 需要严格指令形式的触发，例如“签到”、“结束”等。
+
+---
+
+### 2. 包含匹配（contains）
+
+**逻辑：**
+
+```python
+p in t
+```
+
+即只要消息中**包含**关键词子串即可。
+
+**示例：**
+
+- 规则：
+    - 模式：`contains`
+    - 关键词：`发工资`
+- 群消息：
+    - `什么时候发工资？` ✅ 匹配
+    - `发工资了没？` ✅ 匹配
+    - `下周才发奖金` ❌ 不匹配（没有“发工资”这个连续子串）
+
+适用场景：
+
+> 想要对“提到某个词或短语”的所有情况做统一回复。
+
+---
+
+### 3. 正则匹配（regex）
+
+**逻辑：**
+
+```python
+rule.compiled.search(t) is not None
+```
+
+- 使用 `regex` 库预编译 pattern。
+- 只要正则搜索命中就算匹配。
+
+**示例 1：金额匹配**
+
+- 规则：
+    - 模式：`regex`
+    - 关键词（pattern）：`^报销(\d+)元$`
+- 群消息：
+    - `报销100元` ✅ 匹配（捕获到 100）
+    - `报销20元哈` ❌ 不匹配（末尾多了“哈”）
+    - `我要报销100元` ❌ 不匹配（开头不符合）
+
+**示例 2：模糊表情匹配**
+
+- 规则：
+    - 模式：`regex`
+    - pattern：`(😂|😅|🤣){2,}`
+- 群消息：
+    - `哈哈哈哈😂😂` ✅ 匹配
+    - `😂` ❌ 不匹配（不足两个）
+
+适用场景：
+
+> 需要较复杂的结构匹配，如命令参数、数字、格式校验等。
+
+> **注意：** 正则写错可能导致误匹配或性能问题，请尽量由熟悉正则的管理员配置。
+
+---
+
+### 4. 模糊匹配（fuzzy）
+
+**逻辑：**
+
+```python
+fuzz.partial_ratio(p, t) >= 85
+```
+
+- 使用 RapidFuzz 的 `partial_ratio`，进行模糊字符串匹配。
+- 阈值写死为 **85**，大致表示“很相似”才算命中。
+
+**简单理解：**
+
+- 关键词 `pattern` 和群消息 `text` 非常接近、只有少量差异（错别字、重复、前后多了一些字），就会被认为匹配。
+
+**示例：**
+
+- 规则：
+    - 模式：`fuzzy`
+    - 关键词：`撤回订单`
+- 群消息：
+    - `帮我撤回订单` ✅ 高度相似
+    - `可以帮我撤销一下订单吗` ✅ 通常也会有较高相似度
+    - `我要下新订单` ❌ 相似度较低，不会触发
+
+适用场景：
+
+> 群成员可能不会打出完全一致的关键词，希望允许一定程度的**错别字 / 语序变化**。
+
+---
+
+## 注意事项
+
+- 由于项目使用 MySQL + 异步连接（`asyncmy`）+ SQLAlchemy async：
+    - 请确保数据库字符集为 `utf8mb4`，避免中文或表情出问题。
+- 机器人需要具备：
+    - 读取消息权限（否则收不到消息）
+    - 删除消息权限（用于“好的”按钮和自动删除）
+- 正则规则可能带来性能风险或误匹配：
+    - 尽量保持规则简单；
+    - 不要写非常复杂的回溯型正则。
+- `RULE_COOLDOWN_SECONDS` 是**每个群 + 每条规则**的冷却时间：
+    - 例如设置为 8，某条规则在 A 群刚触发过，那么 8 秒内**再次命中该规则**会被忽略，避免刷屏。

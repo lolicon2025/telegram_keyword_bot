@@ -29,17 +29,31 @@ class GroupConfig(Base):
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
-    rules: Mapped[list["Rule"]] = relationship(back_populates="group", cascade="all, delete-orphan")
+    rules: Mapped[list["Rule"]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+    )
 
 
 class Rule(Base):
     __tablename__ = "rules"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    group_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("groups.group_id", ondelete="CASCADE"), index=True)
+    group_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("groups.group_id", ondelete="CASCADE"),
+        index=True,
+    )
 
     match_type: Mapped[str] = mapped_column(RuleMatchType, nullable=False)
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
@@ -48,9 +62,19 @@ class Rule(Base):
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # 多少秒后自动删除机器人回复；None 或 0 表示不自动删除
+    delete_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)  # Telegram user_id
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
 
     group: Mapped["GroupConfig"] = relationship(back_populates="rules")
 
@@ -69,4 +93,7 @@ class AuditLog(Base):
     before_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     after_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
-    created_at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )

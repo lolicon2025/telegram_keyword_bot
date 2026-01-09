@@ -16,13 +16,14 @@ class RuleDTO:
     reply: str
     priority: int
     enabled: bool
+    delete_after: int | None = None
     compiled: Any | None = None  # compiled regex or other artifacts
 
 
 class RuleCache:
     def __init__(self, ttl_seconds: int):
         self.ttl = ttl_seconds
-        self._cache: Dict[int, Tuple[float, List[RuleDTO]]] = {}  # group_id -> (loaded_ts, rules)
+        self._cache: Dict[int, Tuple[float, List[RuleDTO]]] = {}
 
     def invalidate(self, group_id: int) -> None:
         self._cache.pop(group_id, None)
@@ -38,12 +39,14 @@ class RuleCache:
         return rules
 
     def set(self, group_id: int, rules: List[RuleDTO]) -> None:
-        # precompile regex patterns for speed and to catch invalid ones early
+        # 预编译正则
         for r in rules:
             if r.match_type == "regex":
                 try:
                     r.compiled = re.compile(r.pattern, flags=re.IGNORECASE)
                 except Exception as e:
-                    logger.warning(f"Invalid regex for rule {r.id}: {e}. Skipping compilation; rule will be ignored.")
+                    logger.warning(
+                        f"Invalid regex for rule {r.id}: {e}. Skipping compilation; rule will be ignored."
+                    )
                     r.compiled = None
         self._cache[group_id] = (time.time(), rules)

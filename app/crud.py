@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 from typing import Sequence
-from sqlalchemy import select, delete, update
+
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import GroupConfig, Rule, AuditLog
 
 
-async def ensure_group(session: AsyncSession, group_id: int, title: str | None = None) -> GroupConfig:
+async def ensure_group(
+    session: AsyncSession,
+    group_id: int,
+    title: str | None = None,
+) -> GroupConfig:
+    """确保 groups 表里存在该群记录。"""
     res = await session.execute(select(GroupConfig).where(GroupConfig.group_id == group_id))
     g = res.scalar_one_or_none()
     if g is None:
@@ -15,13 +21,18 @@ async def ensure_group(session: AsyncSession, group_id: int, title: str | None =
         session.add(g)
         await session.flush()
     else:
-        # keep title reasonably fresh
+        # 如果传入了新的标题，可以顺便更新一下
         if title and g.title != title:
             g.title = title
     return g
 
 
-async def list_rules(session: AsyncSession, group_id: int, limit: int = 30, offset: int = 0) -> Sequence[Rule]:
+async def list_rules(
+    session: AsyncSession,
+    group_id: int,
+    limit: int = 30,
+    offset: int = 0,
+) -> Sequence[Rule]:
     res = await session.execute(
         select(Rule)
         .where(Rule.group_id == group_id)
@@ -50,6 +61,7 @@ async def create_rule(
     created_by: int,
     priority: int = 100,
     enabled: bool = True,
+    delete_after: int | None = None,
 ) -> Rule:
     rule = Rule(
         group_id=group_id,
@@ -59,17 +71,32 @@ async def create_rule(
         created_by=created_by,
         priority=priority,
         enabled=enabled,
+        delete_after=delete_after,
     )
     session.add(rule)
     await session.flush()
     return rule
 
 
-async def delete_rule_by_id(session: AsyncSession, group_id: int, rule_id: int) -> bool:
+async def get_rule(
+    session: AsyncSession,
+    group_id: int,
+    rule_id: int,
+) -> Rule | None:
     res = await session.execute(
+        select(Rule).where(Rule.group_id == group_id, Rule.id == rule_id)
+    )
+    return res.scalar_one_or_none()
+
+
+async def delete_rule_by_id(
+    session: AsyncSession,
+    group_id: int,
+    rule_id: int,
+) -> None:
+    await session.execute(
         delete(Rule).where(Rule.group_id == group_id, Rule.id == rule_id)
     )
-    return res.rowcount > 0
 
 
 async def add_audit(
