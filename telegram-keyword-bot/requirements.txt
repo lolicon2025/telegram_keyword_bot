@@ -1,9 +1,0 @@
-python-telegram-bot>=22.5
-SQLAlchemy[asyncio]>=2.0
-asyncmy>=0.2.10
-pydantic>=2.0
-python-dotenv>=1.0
-regex>=2024.0
-rapidfuzz>=3.0
-loguru>=0.7
-cryptography>=41
